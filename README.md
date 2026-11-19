@@ -65,7 +65,7 @@ macOS 15 Sequoia or later, Apple Silicon or Intel.
 
 ## Install
 
-1. Download `TextHunter-1.0.dmg` from [Releases](../../releases) and drag TextHunter to Applications.
+1. Download `TextHunter-1.1.dmg` from [Releases](../../releases) and drag TextHunter to Applications.
 2. TextHunter is not notarized, so macOS blocks it the first time. Open System Settings › Privacy & Security, scroll down and click **Open Anyway**. You can also clear the quarantine flag from Terminal:
    ```
    xattr -dr com.apple.quarantine /Applications/TextHunter.app
