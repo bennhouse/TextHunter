@@ -104,8 +104,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self.icon.beginWorking()
             let join = Prefs.shared.joinWrappedLines
+            let label = Prefs.shared.labelSpecialText
             DispatchQueue.global(qos: .userInitiated).async {
-                let lines = (try? TextRecognizer.recognize(image)) ?? []
+                let lines = (try? TextRecognizer.recognize(image, labelSpecialText: label)) ?? []
                 let text = ParagraphJoiner.text(from: lines, joinWrappedLines: join)
                     .trimmingCharacters(in: TextRecognizer.blank)
                 DispatchQueue.main.async {

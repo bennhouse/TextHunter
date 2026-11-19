@@ -47,6 +47,9 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle("Join wrapped lines", isOn: $prefs.joinWrappedLines)
                     caption("Lines that break only for lack of room are joined, so paragraphs copy as running text.")
+                    Toggle("Label special text", isOn: $prefs.labelSpecialText)
+                        .padding(.top, 4)
+                    caption("Superscripts, subscripts and text on coloured bubbles are marked, e.g. [superscript: 17] or [blue bubble: Source 1].")
                 }
             }
             GridRow {

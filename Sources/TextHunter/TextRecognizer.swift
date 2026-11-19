@@ -13,8 +13,9 @@ enum TextRecognizer {
 
     /// Recognises the text in `image` with Apple's on-device OCR and returns it as visual lines,
     /// top to bottom. Pieces of text that Vision reports separately but that sit on the same
-    /// line are merged left to right.
-    static func recognize(_ image: CGImage) throws -> [TextLine] {
+    /// line are merged left to right. With `labelSpecialText`, superscripts, subscripts and text
+    /// on coloured bubbles are labelled (see `SpecialText`).
+    static func recognize(_ image: CGImage, labelSpecialText: Bool = false) throws -> [TextLine] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
@@ -24,11 +25,22 @@ enum TextRecognizer {
         try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
 
         let w = CGFloat(image.width), h = CGFloat(image.height)
-        let pieces: [TextLine] = (request.results ?? []).compactMap { obs in
+        var pieces: [TextLine] = (request.results ?? []).compactMap { obs in
             guard let text = obs.topCandidates(1).first?.string.trimmingCharacters(in: Self.blank),
                   !text.isEmpty else { return nil }
             let b = obs.boundingBox
             return TextLine(text: text, rect: CGRect(x: b.minX * w, y: b.minY * h, width: b.width * w, height: b.height * h))
+        }
+        if labelSpecialText, let bitmap = Bitmap(image), let background = bitmap.dominant(in: bitmap.whole, step: 4) {
+            pieces = pieces.map { piece in
+                var piece = piece
+                if let color = SpecialText.bubbleColor(around: piece.rect, in: bitmap, background: background) {
+                    piece.text = "[\(color) bubble: \(piece.text)]"
+                } else if let labelled = SpecialText.labelScripts(in: piece.rect, of: bitmap) {
+                    piece.text = labelled
+                }
+                return piece
+            }
         }
         return groupIntoLines(pieces)
     }

@@ -24,13 +24,17 @@ final class Prefs: ObservableObject {
     @Published var joinWrappedLines: Bool {
         didSet { defaults.set(joinWrappedLines, forKey: "joinWrappedLines") }
     }
+    @Published var labelSpecialText: Bool {
+        didSet { defaults.set(labelSpecialText, forKey: "labelSpecialText") }
+    }
     @Published private(set) var launchAtLogin: Bool
     @Published private(set) var launchAtLoginNote: String?
     private var clearStatus: DispatchWorkItem?
 
     private init() {
-        defaults.register(defaults: ["joinWrappedLines": true])
+        defaults.register(defaults: ["joinWrappedLines": true, "labelSpecialText": true])
         joinWrappedLines = defaults.bool(forKey: "joinWrappedLines")
+        labelSpecialText = defaults.bool(forKey: "labelSpecialText")
         if let data = defaults.data(forKey: "shortcut"), let s = try? JSONDecoder().decode(Shortcut.self, from: data) {
             shortcut = s
         } else {

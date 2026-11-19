@@ -1,7 +1,7 @@
 import Cocoa
 import SwiftUI
 
-// Developer mode: `TextHunter --ocr <image> [--raw]` prints the text the app would copy
+// Developer mode: `TextHunter --ocr <image> [--raw] [--plain]` prints the text the app would copy
 // and exits, so recognition and line joining can be checked without the interactive capture.
 let args = CommandLine.arguments
 if args.count >= 3, args[1] == "--ocr" {
@@ -9,7 +9,7 @@ if args.count >= 3, args[1] == "--ocr" {
         FileHandle.standardError.write("Cannot read image \(args[2])\n".data(using: .utf8)!)
         exit(1)
     }
-    let lines = (try? TextRecognizer.recognize(image)) ?? []
+    let lines = (try? TextRecognizer.recognize(image, labelSpecialText: !args.contains("--plain"))) ?? []
     print(ParagraphJoiner.text(from: lines, joinWrappedLines: !args.contains("--raw")))
     exit(0)
 }

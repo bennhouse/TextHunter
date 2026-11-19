@@ -25,6 +25,22 @@ Text copied from a book or an article usually breaks at the end of every line. W
 
 This is a heuristic. It works well on running text but can join lines it should not in poems, code or tables. In that case, turn the option off in Settings.
 
+## Labelling special text
+
+Some text is set apart from the line it sits on, and plain OCR loses it or glues it to the next word. With **Label special text** turned on (the default), TextHunter marks it:
+
+| On screen | Copied as |
+| --- | --- |
+| results¹⁷ important | `results[superscript: 17] important` |
+| H₂O | `H[subscript: 2]O` |
+| x² + y³ | `x[superscript: 2] + y[superscript: 3]` |
+| text on a coloured badge, "Source 1" on blue | `[blue bubble: Source 1]` |
+
+- Superscripts and subscripts are found in the image itself. TextHunter finds each glyph of the line, works out the baseline, and reads the small glyphs that sit clearly above or below it on their own. The line is then read again without them, and the labels are put back where they were, joined to the word they touch.
+- Quotes, apostrophes, degree signs and ordinal marks (º, ª) are left as text.
+- A bubble is text whose background colour differs clearly from the rest of the capture. The label names the colour (red, orange, yellow, green, teal, blue, purple, pink, grey, dark).
+- Turn it off for plain text.
+
 ## Settings
 
 - **Shortcut**: click the field and press the new keys. The shortcut needs at least one of ⌘, ⌥ or ⌃ (F-keys can be used alone).
@@ -32,6 +48,7 @@ This is a heuristic. It works well on running text but can join lines it should 
   - If macOS uses the same keys (for example ⇧⌘4 or ⌘Space), TextHunter says which macOS shortcut it is and, if you confirm, turns that macOS shortcut off. It is turned back on when you choose a different shortcut for TextHunter.
   - If another app already uses the keys as a global shortcut, macOS does not let TextHunter take them, and TextHunter asks you to choose another one.
 - **Join wrapped lines**: see above.
+- **Label special text**: see above.
 - **Launch at login**.
 
 ## Requirements
