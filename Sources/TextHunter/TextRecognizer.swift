@@ -34,7 +34,7 @@ enum TextRecognizer {
             let b = obs.boundingBox
             return TextLine(text: text, rect: CGRect(x: b.minX * w, y: b.minY * h, width: b.width * w, height: b.height * h))
         }
-        if labelSpecialText, let bitmap = Bitmap(image), let background = bitmap.dominant(in: bitmap.whole, step: 4) {
+        if labelSpecialText, let bitmap = Bitmap(image), let background = bitmap.dominant(in: bitmap.whole, step: 4, fine: true) {
             pieces = zip(pieces, candidates).map { piece, candidate in
                 var piece = piece
                 if let color = SpecialText.bubbleColor(around: piece.rect, in: bitmap, background: background) {

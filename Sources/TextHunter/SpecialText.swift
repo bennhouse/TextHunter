@@ -16,62 +16,84 @@ import Vision
 enum SpecialText {
     // MARK: Bubbles
 
+    // A bubble is a patch of one colour behind some text that differs from the capture's normal
+    // background, however little: a light grey tag on white differs by only 7 per channel, a dark
+    // grey one on black by 20. Screenshots have exact colours, so small differences are reliable
+    // when the patch is uniform and ends, with the normal background on both sides of it.
+
+    /// The colour of the patch behind a box, when it is not the normal background.
+    private static func patch(behind box: Box, in bitmap: Bitmap, background: RGB) -> RGB? {
+        guard let c = bitmap.dominant(in: box, step: 1, fine: true), c.distance(to: background) >= 12,
+              bitmap.share(of: c, in: box, tolerance: 9) > 0.5 else { return nil }
+        return c
+    }
+
+    /// The normal background comes back left and right of `rect` (Vision pixels): the patch ends
+    /// there, so it is a bubble and not a panel, a sidebar or a table row of another colour.
+    private static func endsOnBackground(_ rect: CGRect, in bitmap: Bitmap, background: RGB) -> Bool {
+        let h = rect.height
+        for x in [rect.minX - h * 1.5, rect.maxX + h * 1.5] {
+            guard x >= 0, x < CGFloat(bitmap.width) else { continue }   // edge of the capture
+            let strip = bitmap.topDown(CGRect(x: x - h * 0.15, y: rect.minY, width: h * 0.3, height: h))
+            guard strip.width > 0, let side = bitmap.dominant(in: strip, step: 1, fine: true) else { continue }
+            if side.distance(to: background) > 9 { return false }
+        }
+        return true
+    }
+
     /// The colour name of the bubble behind `rect` (Vision coordinates in pixels, origin
     /// bottom-left), or nil when the text sits on the image's normal background.
     static func bubbleColor(around rect: CGRect, in bitmap: Bitmap, background: RGB) -> String? {
         let area = rect.width * rect.height
         guard area < CGFloat(bitmap.width * bitmap.height) * 0.5 else { return nil }
         let region = bitmap.topDown(rect.insetBy(dx: -rect.height * 0.1, dy: -rect.height * 0.1))
-        // Same test as for bubbles inside a line: a clearly different colour that fills most of
-        // the box (a dark grey tag on black differs by only about 20 per channel).
-        guard let local = bitmap.dominant(in: region, step: 1), local.distance(to: background) > 40,
-              bitmap.share(of: local, in: region) > 0.45 else { return nil }
-        // A bubble ends: beside it, left and right, the normal background comes back. A panel or
-        // sidebar of another colour goes on, and its text is not a bubble.
-        let h = rect.height
-        for x in [rect.minX - h * 1.5, rect.maxX + h * 1.5] {
-            let strip = bitmap.topDown(CGRect(x: x - h * 0.15, y: rect.minY, width: h * 0.3, height: h))
-            guard x >= 0, x < CGFloat(bitmap.width), strip.width > 0 else { continue }   // edge of the capture
-            if let side = bitmap.dominant(in: strip, step: 1), side.distance(to: background) > 30 { return nil }
-        }
+        guard let local = patch(behind: region, in: bitmap, background: background),
+              endsOnBackground(rect, in: bitmap, background: background) else { return nil }
         return local.name(on: background)
     }
 
     /// Bubbles inside a line of normal text (a source tag at the end of a sentence, a badge):
-    /// each word is checked for the colour behind it, and runs of words on the same colour,
-    /// clearly different from the image background, are labelled. Nil when there are none.
+    /// each word is checked for the colour behind it, and runs of words on the same colour that
+    /// end on the normal background are labelled. Nil when there are none.
     static func labelInlineBubbles(_ candidate: VNRecognizedText, text: String, imageSize: CGSize,
                                    in bitmap: Bitmap, background: RGB) -> String? {
-        struct Word { var text: String; var color: RGB? }
+        struct Word { var text: String; var rect: CGRect?; var color: RGB? }
         var words: [Word] = []
         var from = text.startIndex
         for piece in text.split(separator: " ") {
             guard let range = text.range(of: piece, range: from..<text.endIndex) else { continue }
             from = range.upperBound
-            var color: RGB?
+            var word = Word(text: String(piece))
             if let b = (try? candidate.boundingBox(for: range))?.boundingBox {
                 let r = CGRect(x: b.minX * imageSize.width, y: b.minY * imageSize.height,
                                width: b.width * imageSize.width, height: b.height * imageSize.height)
+                word.rect = r
                 // The colour behind the word: the most common one in its box (letters are a minority).
-                let box = bitmap.topDown(r.insetBy(dx: -r.height * 0.1, dy: -r.height * 0.15))
-                if let c = bitmap.dominant(in: box, step: 1), c.distance(to: background) > 40,
-                   bitmap.share(of: c, in: box) > 0.45 { color = c }
+                word.color = patch(behind: bitmap.topDown(r.insetBy(dx: -r.height * 0.1, dy: -r.height * 0.15)),
+                                   in: bitmap, background: background)
             }
-            words.append(Word(text: String(piece), color: color))
+            words.append(word)
         }
         // At least one word on the normal background, or the whole piece is a bubble (handled above).
         guard words.contains(where: { $0.color != nil }), words.contains(where: { $0.color == nil }) else { return nil }
         var out: [String] = []
+        var found = false
         var i = 0
         while i < words.count {
             guard let c = words[i].color else { out.append(words[i].text); i += 1; continue }
-            var run = [words[i].text]
             var j = i + 1
-            while j < words.count, let d = words[j].color, d.distance(to: c) < 40 { run.append(words[j].text); j += 1 }
-            out.append("[\(c.name(on: background)) bubble: \(run.joined(separator: " "))]")
+            while j < words.count, let d = words[j].color, d.distance(to: c) < 12 { j += 1 }
+            let run = words[i..<j]
+            let rect = run.compactMap(\.rect).reduce(CGRect.null) { $0.union($1) }
+            if !rect.isNull, endsOnBackground(rect, in: bitmap, background: background) {
+                out.append("[\(c.name(on: background)) bubble: \(run.map(\.text).joined(separator: " "))]")
+                found = true
+            } else {
+                out.append(contentsOf: run.map(\.text))
+            }
             i = j
         }
-        return out.joined(separator: " ")
+        return found ? out.joined(separator: " ") : nil
     }
 
     // MARK: Superscripts and subscripts
@@ -383,15 +405,16 @@ final class Bitmap {
     var whole: Box { Box(minX: 0, minY: 0, maxX: width - 1, maxY: height - 1) }
 
     /// Share of the pixels in a box that are close to `color`.
-    func share(of color: RGB, in box: Box) -> Double {
+    func share(of color: RGB, in box: Box, tolerance: Int = 24) -> Double {
         guard box.width > 0, box.height > 0 else { return 0 }
         var n = 0
-        for y in box.minY...box.maxY { for x in box.minX...box.maxX where pixel(x, y).distance(to: color) < 24 { n += 1 } }
+        for y in box.minY...box.maxY { for x in box.minX...box.maxX where pixel(x, y).distance(to: color) < tolerance { n += 1 } }
         return Double(n) / Double(box.width * box.height)
     }
 
     /// The most common colour in a box (colours grouped in steps of 16).
-    func dominant(in box: Box, step: Int) -> RGB? {
+    /// `fine`: colours grouped in steps of 4 instead of 16, to tell apart greys a few levels apart.
+    func dominant(in box: Box, step: Int, fine: Bool = false) -> RGB? {
         guard box.width > 0, box.height > 0 else { return nil }
         var counts: [Int: (n: Int, r: Int, g: Int, b: Int)] = [:]
         var y = box.minY
@@ -399,7 +422,9 @@ final class Bitmap {
             var x = box.minX
             while x <= box.maxX {
                 let p = pixel(x, y)
-                let key = (p.r >> 4) << 8 | (p.g >> 4) << 4 | (p.b >> 4)
+                let shift = fine ? 2 : 4, bits = fine ? 6 : 4
+                let r = p.r >> shift, g = p.g >> shift, b = p.b >> shift
+                let key: Int = (r << (2 * bits)) | (g << bits) | b
                 let c = counts[key] ?? (0, 0, 0, 0)
                 counts[key] = (c.n + 1, c.r + p.r, c.g + p.g, c.b + p.b)
                 x += step
