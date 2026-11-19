@@ -48,7 +48,11 @@ enum TextRecognizer {
                 return piece
             }
         }
-        return groupIntoLines(pieces)
+        let lines = groupIntoLines(pieces)
+        if labelSpecialText, let bitmap = Bitmap(image) {
+            return Headings.label(lines, sizes: lines.map { SpecialText.textSize(in: $0.rect, of: bitmap) })
+        }
+        return lines
     }
 
     /// Groups pieces whose vertical centres are close into one line, ordered top to bottom.
@@ -68,5 +72,58 @@ enum TextRecognizer {
             return TextLine(text: ordered.map(\.text).joined(separator: " "),
                             rect: ordered.dropFirst().reduce(ordered[0].rect) { $0.union($1.rect) })
         }
+    }
+}
+
+/// Titles and subtitles: lines set clearly bigger than the running text. The biggest size is the
+/// title, the other bigger sizes are subtitles. A heading that wraps onto two lines stays one.
+enum Headings {
+    /// `sizes`: the measured text size of each line (nil when it can't be measured).
+    static func label(_ lines: [TextLine], sizes: [CGFloat?]) -> [TextLine] {
+        guard lines.count >= 3 else { return lines }
+        func height(_ i: Int) -> CGFloat { sizes[i] ?? 0 }
+        // The running text's size: the size that holds the most characters.
+        let weighted = lines.indices.filter { sizes[$0] != nil }
+            .flatMap { i in Array(repeating: height(i), count: max(lines[i].text.count / 10, 1)) }.sorted()
+        guard !weighted.isEmpty else { return lines }
+        let body = weighted[weighted.count / 2]
+        guard body > 0 else { return lines }
+        // Lines with superscripts or bubbles are taller because of them, not because of their size.
+        let big = lines.indices.filter { i in
+            height(i) >= body * 1.2 && !lines[i].text.contains("[superscript")
+                && !lines[i].text.contains("[subscript") && !lines[i].text.contains(" bubble: ")
+        }
+        guard !big.isEmpty, big.count * 2 < lines.count else { return lines }
+
+        // Sizes within 12% of each other are the same level.
+        var levels: [CGFloat] = []
+        for h in big.map({ height($0) }).sorted(by: >) where !levels.contains(where: { abs($0 - h) / $0 < 0.12 }) {
+            levels.append(h)
+        }
+        func level(_ i: Int) -> Int { levels.firstIndex { abs($0 - height(i)) / $0 < 0.12 } ?? 0 }
+        func name(_ lvl: Int, onlyLine: Bool) -> String {
+            if levels.count > 1 { return lvl == 0 ? "title" : "subtitle" }
+            // One bigger size only: a single line at the top is the title, otherwise they are subtitles.
+            return onlyLine && big.first == 0 ? "title" : "subtitle"
+        }
+
+        var out: [TextLine] = []
+        var i = 0
+        while i < lines.count {
+            guard big.contains(i) else { out.append(lines[i]); i += 1; continue }
+            let lvl = level(i)
+            var j = i + 1
+            var text = lines[i].text, rect = lines[i].rect
+            // The next line continues the heading: same size, right below it.
+            while j < lines.count, big.contains(j), level(j) == lvl,
+                  rect.minY - lines[j].rect.maxY < lines[j].rect.height * 0.6 {
+                text += " " + lines[j].text
+                rect = rect.union(lines[j].rect)
+                j += 1
+            }
+            out.append(TextLine(text: "[\(name(lvl, onlyLine: big.count == j - i)): \(text)]", rect: rect))
+            i = j
+        }
+        return out
     }
 }

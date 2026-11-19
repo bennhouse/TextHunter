@@ -49,7 +49,7 @@ struct SettingsView: View {
                     caption("Lines that break only for lack of room are joined, so paragraphs copy as running text.")
                     Toggle("Label special text", isOn: $prefs.labelSpecialText)
                         .padding(.top, 4)
-                    caption("Superscripts, subscripts and text on coloured bubbles are marked, e.g. [superscript: 17] or [blue bubble: Source 1].")
+                    caption("Titles, superscripts, subscripts and text on coloured bubbles are marked, e.g. [title: Chapter 1], [superscript: 17] or [blue bubble: Source 1].")
                 }
             }
             GridRow {

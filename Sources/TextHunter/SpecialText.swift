@@ -96,6 +96,25 @@ enum SpecialText {
         return found ? out.joined(separator: " ") : nil
     }
 
+    // MARK: Text size
+
+    /// The size of the text in a line, measured on the glyphs themselves: Vision's boxes don't
+    /// follow the font size closely.
+    static func textSize(in rect: CGRect, of bitmap: Bitmap) -> CGFloat? {
+        let h = rect.height
+        let region = bitmap.topDown(rect.insetBy(dx: 0, dy: -h * 0.15))
+        guard region.width > 4, region.height > 4, let bg = bitmap.dominant(in: region, step: 2) else { return nil }
+        let glyphs = mergeIntoGlyphs(bitmap.inkComponents(in: region, background: bg).filter {
+            $0.box.minY > region.minY && $0.box.maxY < region.maxY - 1
+        })
+        guard glyphs.count >= 3 else { return nil }
+        // The height of the tall letters (capitals, digits, d, l, t…), which nearly every line has:
+        // steadier than the lowercase height, which a line full of capitals would push up.
+        let heights = glyphs.map { CGFloat($0.box.height) }.sorted()
+        let tall = heights[min(heights.count - 1, Int(CGFloat(heights.count) * 0.85))]
+        return tall > 2 ? tall : nil
+    }
+
     // MARK: Superscripts and subscripts
 
     /// The piece's text with its superscripts and subscripts labelled, or nil when it has none.
