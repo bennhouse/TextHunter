@@ -32,8 +32,9 @@ enum ParagraphJoiner {
 
     private static func isWrap(_ a: TextLine, _ b: TextLine, gap: CGFloat, normalGap: CGFloat, lineHeight: CGFloat,
                                left: CGFloat, right: CGFloat, charWidth: CGFloat) -> Bool {
-        // Titles and subtitles stand on their own line.
-        if [a.text, b.text].contains(where: { $0.hasPrefix("[title: ") || $0.hasPrefix("[subtitle: ") }) { return false }
+        // Titles, subtitles, captions and notes stand on their own line.
+        let roles = ["[title: ", "[subtitle: ", "[caption: ", "[note: "]
+        if [a.text, b.text].contains(where: { t in roles.contains { t.hasPrefix($0) } }) { return false }
         // Extra vertical space: a new paragraph.
         if gap > normalGap + lineHeight * 0.6 { return false }
         // The next line starts a list item.

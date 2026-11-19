@@ -49,8 +49,8 @@ enum TextRecognizer {
             }
         }
         let lines = groupIntoLines(pieces)
-        if labelSpecialText, let bitmap = Bitmap(image) {
-            return Headings.label(lines, sizes: lines.map { SpecialText.textSize(in: $0.rect, of: bitmap) })
+        if labelSpecialText, let bitmap = Bitmap(image), let background = bitmap.dominant(in: bitmap.whole, step: 4, fine: true) {
+            return Roles.label(lines, bitmap: bitmap, background: background)
         }
         return lines
     }
@@ -75,54 +75,104 @@ enum TextRecognizer {
     }
 }
 
-/// Titles and subtitles: lines set clearly bigger than the running text. The biggest size is the
-/// title, the other bigger sizes are subtitles. A heading that wraps onto two lines stays one.
-enum Headings {
-    /// `sizes`: the measured text size of each line (nil when it can't be measured).
-    static func label(_ lines: [TextLine], sizes: [CGFloat?]) -> [TextLine] {
-        guard lines.count >= 3 else { return lines }
-        func height(_ i: Int) -> CGFloat { sizes[i] ?? 0 }
-        // The running text's size: the size that holds the most characters.
-        let weighted = lines.indices.filter { sizes[$0] != nil }
-            .flatMap { i in Array(repeating: height(i), count: max(lines[i].text.count / 10, 1)) }.sorted()
-        guard !weighted.isEmpty else { return lines }
-        let body = weighted[weighted.count / 2]
-        guard body > 0 else { return lines }
-        // Lines with superscripts or bubbles are taller because of them, not because of their size.
-        let big = lines.indices.filter { i in
-            height(i) >= body * 1.2 && !lines[i].text.contains("[superscript")
-                && !lines[i].text.contains("[subscript") && !lines[i].text.contains(" bubble: ")
-        }
-        guard !big.isEmpty, big.count * 2 < lines.count else { return lines }
+/// The parts of a capture set apart from the main text. The main text (the style, size and colour,
+/// that holds the most characters) is left as it is; the rest is marked by its role:
+/// - bigger: the biggest size is the title, other bigger sizes are subtitles;
+/// - smaller, next to an image: a caption;
+/// - smaller or fainter, elsewhere: a note (a remark, a footnote, a detail).
+/// Each marked block stays on its own line, and one that wraps onto several lines stays one.
+enum Roles {
+    struct Style { var size: CGFloat; var ink: RGB? }
 
-        // Sizes within 12% of each other are the same level.
+    static func label(_ lines: [TextLine], bitmap: Bitmap, background: RGB) -> [TextLine] {
+        guard lines.count >= 2 else { return lines }
+        let styles = lines.map { l -> Style? in
+            SpecialText.textSize(in: l.rect, of: bitmap).map { Style(size: $0, ink: SpecialText.inkColor(in: l.rect, of: bitmap)) }
+        }
+        func sameStyle(_ a: Style?, _ b: Style?) -> Bool {
+            guard let a, let b else { return false }
+            guard abs(a.size - b.size) / max(a.size, b.size) < 0.12 else { return false }
+            if let x = a.ink, let y = b.ink { return x.distance(to: y) < 90 }
+            return true
+        }
+
+        // Blocks: lines one below the other with the same style.
+        var blocks: [[Int]] = []
+        for i in lines.indices {
+            if let last = blocks.last?.last, sameStyle(styles[last], styles[i]),
+               lines[last].rect.minY - lines[i].rect.maxY < lines[i].rect.height * 0.9 {
+                blocks[blocks.count - 1].append(i)
+            } else {
+                blocks.append([i])
+            }
+        }
+        // The main text: the style with the most characters.
+        func chars(_ b: [Int]) -> Int { b.reduce(0) { $0 + lines[$1].text.count } }
+        let measured = blocks.filter { styles[$0[0]] != nil }
+        guard let mainBlock = measured.max(by: { a, b in
+            let ca = measured.filter { sameStyle(styles[$0[0]], styles[a[0]]) }.reduce(0) { $0 + chars($1) }
+            let cb = measured.filter { sameStyle(styles[$0[0]], styles[b[0]]) }.reduce(0) { $0 + chars($1) }
+            return ca < cb
+        }), let main = styles[mainBlock[0]] else { return lines }
+        let mainChars = measured.filter { sameStyle(styles[$0[0]], main) }.reduce(0) { $0 + chars($1) }
+        // Not enough main text to compare against (a capture of a single heading, a list of labels…).
+        guard mainChars >= 60, Double(mainChars) >= Double(lines.reduce(0) { $0 + $1.text.count }) * 0.4 else { return lines }
+
+        // Lines with superscripts or bubbles are measured badly: they are left to their own labels.
+        func plain(_ b: [Int]) -> Bool {
+            !b.contains { lines[$0].text.contains("[superscript") || lines[$0].text.contains("[subscript") || lines[$0].text.contains(" bubble: ") }
+        }
+        let bigger = Set(blocks.indices.filter { k in
+            plain(blocks[k]) && (styles[blocks[k][0]]?.size ?? 0) >= main.size * 1.2
+        })
         var levels: [CGFloat] = []
-        for h in big.map({ height($0) }).sorted(by: >) where !levels.contains(where: { abs($0 - h) / $0 < 0.12 }) {
+        for h in bigger.map({ styles[blocks[$0][0]]!.size }).sorted(by: >) where !levels.contains(where: { abs($0 - h) / $0 < 0.12 }) {
             levels.append(h)
         }
-        func level(_ i: Int) -> Int { levels.firstIndex { abs($0 - height(i)) / $0 < 0.12 } ?? 0 }
-        func name(_ lvl: Int, onlyLine: Bool) -> String {
-            if levels.count > 1 { return lvl == 0 ? "title" : "subtitle" }
-            // One bigger size only: a single line at the top is the title, otherwise they are subtitles.
-            return onlyLine && big.first == 0 ? "title" : "subtitle"
+        func headingName(_ k: Int) -> String {
+            let size = styles[blocks[k][0]]!.size
+            let level = levels.firstIndex { abs($0 - size) / $0 < 0.12 } ?? 0
+            if levels.count > 1 { return level == 0 ? "title" : "subtitle" }
+            // One bigger size only: a single heading at the top is the title, otherwise subtitles.
+            return bigger.count == 1 && k == 0 ? "title" : "subtitle"
+        }
+
+        /// An image right above or below the block (a busy area with no text in it).
+        func nextToImage(_ b: [Int]) -> Bool {
+            let rect = b.map { lines[$0].rect }.reduce(CGRect.null) { $0.union($1) }
+            let h = lines[b[0]].rect.height
+            for area in [CGRect(x: rect.minX, y: rect.maxY + h * 0.3, width: rect.width, height: h * 3),
+                         CGRect(x: rect.minX, y: rect.minY - h * 3.3, width: rect.width, height: h * 3)] {
+                let clipped = area.intersection(CGRect(x: 0, y: 0, width: bitmap.width, height: bitmap.height))
+                guard clipped.height > h, !lines.contains(where: { $0.rect.intersects(clipped) }) else { continue }
+                if SpecialText.busyShare(bitmap.topDown(clipped), of: bitmap, background: background) > 0.3 { return true }
+            }
+            return false
+        }
+
+        /// Fainter than the main text: its letters stand out less from the background.
+        func fainter(_ s: Style) -> Bool {
+            guard let ink = s.ink, let mainInk = main.ink else { return false }
+            return ink.distance(to: background) < mainInk.distance(to: background) - 90
         }
 
         var out: [TextLine] = []
-        var i = 0
-        while i < lines.count {
-            guard big.contains(i) else { out.append(lines[i]); i += 1; continue }
-            let lvl = level(i)
-            var j = i + 1
-            var text = lines[i].text, rect = lines[i].rect
-            // The next line continues the heading: same size, right below it.
-            while j < lines.count, big.contains(j), level(j) == lvl,
-                  rect.minY - lines[j].rect.maxY < lines[j].rect.height * 0.6 {
-                text += " " + lines[j].text
-                rect = rect.union(lines[j].rect)
-                j += 1
+        for (k, b) in blocks.enumerated() {
+            let text = b.map { lines[$0].text }.joined(separator: " ")
+            let rect = b.map { lines[$0].rect }.reduce(CGRect.null) { $0.union($1) }
+            var role: String?
+            if let s = styles[b[0]], plain(b), !sameStyle(s, main) || fainter(s) {
+                if bigger.contains(k) {
+                    role = headingName(k)
+                } else if s.size <= main.size * 0.88 || fainter(s) {
+                    role = nextToImage(b) ? "caption" : "note"
+                }
             }
-            out.append(TextLine(text: "[\(name(lvl, onlyLine: big.count == j - i)): \(text)]", rect: rect))
-            i = j
+            if let role {
+                out.append(TextLine(text: "[\(role): \(text)]", rect: rect))
+            } else {
+                out.append(contentsOf: b.map { lines[$0] })
+            }
         }
         return out
     }

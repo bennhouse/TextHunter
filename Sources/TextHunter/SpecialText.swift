@@ -115,6 +115,42 @@ enum SpecialText {
         return tall > 2 ? tall : nil
     }
 
+    /// The colour of the letters in a line (the average of the pixels that are clearly ink).
+    static func inkColor(in rect: CGRect, of bitmap: Bitmap) -> RGB? {
+        let region = bitmap.topDown(rect)
+        guard region.width > 2, region.height > 2, let bg = bitmap.dominant(in: region, step: 2) else { return nil }
+        var r = 0, g = 0, b = 0, n = 0
+        var y = region.minY
+        while y <= region.maxY {
+            var x = region.minX
+            while x <= region.maxX {
+                let p = bitmap.pixel(x, y)
+                if p.distance(to: bg) > 200 { r += p.r; g += p.g; b += p.b; n += 1 }
+                x += 1
+            }
+            y += 1
+        }
+        return n > 10 ? RGB(r: r / n, g: g / n, b: b / n) : nil
+    }
+
+    /// Share of the pixels in a box that are not the background: an image (photo, chart,
+    /// illustration) is busy, empty space or text is not.
+    static func busyShare(_ box: Box, of bitmap: Bitmap, background: RGB) -> Double {
+        guard box.width > 4, box.height > 4 else { return 0 }
+        var busy = 0, total = 0
+        var y = box.minY
+        while y <= box.maxY {
+            var x = box.minX
+            while x <= box.maxX {
+                if bitmap.pixel(x, y).distance(to: background) > 30 { busy += 1 }
+                total += 1
+                x += 2
+            }
+            y += 2
+        }
+        return Double(busy) / Double(max(total, 1))
+    }
+
     // MARK: Superscripts and subscripts
 
     /// The piece's text with its superscripts and subscripts labelled, or nil when it has none.
