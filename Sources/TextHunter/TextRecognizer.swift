@@ -25,17 +25,23 @@ enum TextRecognizer {
         try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
 
         let w = CGFloat(image.width), h = CGFloat(image.height)
+        var candidates: [VNRecognizedText] = []
         var pieces: [TextLine] = (request.results ?? []).compactMap { obs in
-            guard let text = obs.topCandidates(1).first?.string.trimmingCharacters(in: Self.blank),
-                  !text.isEmpty else { return nil }
+            guard let candidate = obs.topCandidates(1).first else { return nil }
+            let text = candidate.string.trimmingCharacters(in: Self.blank)
+            guard !text.isEmpty else { return nil }
+            candidates.append(candidate)
             let b = obs.boundingBox
             return TextLine(text: text, rect: CGRect(x: b.minX * w, y: b.minY * h, width: b.width * w, height: b.height * h))
         }
         if labelSpecialText, let bitmap = Bitmap(image), let background = bitmap.dominant(in: bitmap.whole, step: 4) {
-            pieces = pieces.map { piece in
+            pieces = zip(pieces, candidates).map { piece, candidate in
                 var piece = piece
                 if let color = SpecialText.bubbleColor(around: piece.rect, in: bitmap, background: background) {
                     piece.text = "[\(color) bubble: \(piece.text)]"
+                } else if let labelled = SpecialText.labelInlineBubbles(candidate, text: candidate.string, imageSize: CGSize(width: w, height: h),
+                                                                         in: bitmap, background: background) {
+                    piece.text = labelled
                 } else if let labelled = SpecialText.labelScripts(in: piece.rect, of: bitmap) {
                     piece.text = labelled
                 }

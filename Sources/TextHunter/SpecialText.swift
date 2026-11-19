@@ -23,7 +23,44 @@ enum SpecialText {
         guard area < CGFloat(bitmap.width * bitmap.height) * 0.5 else { return nil }
         let region = bitmap.topDown(rect.insetBy(dx: -rect.height * 0.1, dy: -rect.height * 0.1))
         guard let local = bitmap.dominant(in: region, step: 1), local.distance(to: background) > 70 else { return nil }
-        return local.name
+        return local.name(on: background)
+    }
+
+    /// Bubbles inside a line of normal text (a source tag at the end of a sentence, a badge):
+    /// each word is checked for the colour behind it, and runs of words on the same colour,
+    /// clearly different from the image background, are labelled. Nil when there are none.
+    static func labelInlineBubbles(_ candidate: VNRecognizedText, text: String, imageSize: CGSize,
+                                   in bitmap: Bitmap, background: RGB) -> String? {
+        struct Word { var text: String; var color: RGB? }
+        var words: [Word] = []
+        var from = text.startIndex
+        for piece in text.split(separator: " ") {
+            guard let range = text.range(of: piece, range: from..<text.endIndex) else { continue }
+            from = range.upperBound
+            var color: RGB?
+            if let b = (try? candidate.boundingBox(for: range))?.boundingBox {
+                let r = CGRect(x: b.minX * imageSize.width, y: b.minY * imageSize.height,
+                               width: b.width * imageSize.width, height: b.height * imageSize.height)
+                // The colour behind the word: the most common one in its box (letters are a minority).
+                let box = bitmap.topDown(r.insetBy(dx: -r.height * 0.1, dy: -r.height * 0.15))
+                if let c = bitmap.dominant(in: box, step: 1), c.distance(to: background) > 40,
+                   bitmap.share(of: c, in: box) > 0.45 { color = c }
+            }
+            words.append(Word(text: String(piece), color: color))
+        }
+        // At least one word on the normal background, or the whole piece is a bubble (handled above).
+        guard words.contains(where: { $0.color != nil }), words.contains(where: { $0.color == nil }) else { return nil }
+        var out: [String] = []
+        var i = 0
+        while i < words.count {
+            guard let c = words[i].color else { out.append(words[i].text); i += 1; continue }
+            var run = [words[i].text]
+            var j = i + 1
+            while j < words.count, let d = words[j].color, d.distance(to: c) < 40 { run.append(words[j].text); j += 1 }
+            out.append("[\(c.name(on: background)) bubble: \(run.joined(separator: " "))]")
+            i = j
+        }
+        return out.joined(separator: " ")
     }
 
     // MARK: Superscripts and subscripts
@@ -250,12 +287,15 @@ struct RGB: Equatable {
         abs(r - other.r) + abs(g - other.g) + abs(b - other.b)
     }
 
-    /// A plain colour name for labels.
-    var name: String {
+    /// A plain colour name for labels. Greys are named against the background: a dark grey
+    /// bubble on black is "grey", not "dark".
+    func name(on background: RGB) -> String {
         let color = NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: 1)
         let hue = color.hueComponent * 360, saturation = color.saturationComponent, brightness = color.brightnessComponent
         if saturation < 0.2 {
-            return brightness < 0.3 ? "dark" : (brightness > 0.85 ? "white" : "grey")
+            let lighter = r + g + b > background.r + background.g + background.b
+            if lighter { return brightness > 0.9 ? "white" : "grey" }
+            return brightness < 0.06 ? "black" : (brightness < 0.3 ? "dark" : "grey")
         }
         switch hue {
         case ..<15, 345...: return "red"
@@ -330,6 +370,14 @@ final class Bitmap {
     }
 
     var whole: Box { Box(minX: 0, minY: 0, maxX: width - 1, maxY: height - 1) }
+
+    /// Share of the pixels in a box that are close to `color`.
+    func share(of color: RGB, in box: Box) -> Double {
+        guard box.width > 0, box.height > 0 else { return 0 }
+        var n = 0
+        for y in box.minY...box.maxY { for x in box.minX...box.maxX where pixel(x, y).distance(to: color) < 24 { n += 1 } }
+        return Double(n) / Double(box.width * box.height)
+    }
 
     /// The most common colour in a box (colours grouped in steps of 16).
     func dominant(in box: Box, step: Int) -> RGB? {

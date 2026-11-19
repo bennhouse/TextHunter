@@ -35,10 +35,11 @@ Some text is set apart from the line it sits on, and plain OCR loses it or glues
 | H₂O | `H[subscript: 2]O` |
 | x² + y³ | `x[superscript: 2] + y[superscript: 3]` |
 | text on a coloured badge, "Source 1" on blue | `[blue bubble: Source 1]` |
+| a grey tag at the end of a sentence | `…of the patient. [grey bubble: Ch 1.txt + 3]` |
 
 - Superscripts and subscripts are found in the image itself. TextHunter finds each glyph of the line, works out the baseline, and reads the small glyphs that sit clearly above or below it on their own. The line is then read again without them, and the labels are put back where they were, joined to the word they touch.
 - Quotes, apostrophes, degree signs and ordinal marks (º, ª) are left as text.
-- A bubble is text whose background colour differs clearly from the rest of the capture. The label names the colour (red, orange, yellow, green, teal, blue, purple, pink, grey, dark).
+- A bubble is text whose background colour differs clearly from the rest of the capture: a whole badge, or a few words on their own colour inside a line (a source tag after a sentence). Each word is checked for the colour behind it. The label names the colour (red, orange, yellow, green, teal, blue, purple, pink, grey, dark).
 - Turn it off for plain text.
 
 ## Settings
