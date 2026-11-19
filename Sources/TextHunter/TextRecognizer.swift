@@ -5,6 +5,10 @@ import Vision
 struct TextLine {
     var text: String
     var rect: CGRect
+    /// A title or subtitle: set apart by line breaks instead of a label.
+    var heading: Heading? = nil
+
+    enum Heading { case title, subtitle }
 }
 
 enum TextRecognizer {
@@ -77,7 +81,8 @@ enum TextRecognizer {
 
 /// The parts of a capture set apart from the main text. The main text (the style, size and colour,
 /// that holds the most characters) is left as it is; the rest is marked by its role:
-/// - bigger: the biggest size is the title, other bigger sizes are subtitles;
+/// - bigger: the biggest size is the title, other bigger sizes are subtitles. These are not
+///   labelled: they keep the visual hierarchy through line breaks (see `ParagraphJoiner`);
 /// - smaller, next to an image: a caption;
 /// - smaller or fainter, elsewhere: a note (a remark, a footnote, a detail).
 /// Each marked block stays on its own line, and one that wraps onto several lines stays one.
@@ -168,7 +173,9 @@ enum Roles {
                     role = nextToImage(b) ? "caption" : "note"
                 }
             }
-            if let role {
+            if role == "title" || role == "subtitle" {
+                out.append(TextLine(text: text, rect: rect, heading: role == "title" ? .title : .subtitle))
+            } else if let role {
                 out.append(TextLine(text: "[\(role): \(text)]", rect: rect))
             } else {
                 out.append(contentsOf: b.map { lines[$0] })

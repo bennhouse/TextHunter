@@ -7,7 +7,8 @@ import Foundation
 enum ParagraphJoiner {
     static func text(from lines: [TextLine], joinWrappedLines: Bool) -> String {
         guard joinWrappedLines, lines.count > 1 else {
-            return lines.map(\.text).joined(separator: "\n")
+            return lines.enumerated().map { i, l in (i > 0 && opensSection(l, after: lines[i - 1]) ? "\n" : "") + l.text }
+                .joined(separator: "\n")
         }
 
         let left = lines.map(\.rect.minX).min()!
@@ -25,7 +26,11 @@ enum ParagraphJoiner {
             let a = lines[i - 1], b = lines[i]
             let wrapped = wideEnough && isWrap(a, b, gap: gaps[i - 1], normalGap: normalGap, lineHeight: lineHeight,
                                                left: left, right: right, charWidth: charWidth)
-            out = wrapped ? join(out, b.text) : out + "\n" + b.text
+            if opensSection(b, after: a) {
+                out += "\n\n" + b.text
+            } else {
+                out = wrapped ? join(out, b.text) : out + "\n" + b.text
+            }
         }
         return out
     }
@@ -33,7 +38,8 @@ enum ParagraphJoiner {
     private static func isWrap(_ a: TextLine, _ b: TextLine, gap: CGFloat, normalGap: CGFloat, lineHeight: CGFloat,
                                left: CGFloat, right: CGFloat, charWidth: CGFloat) -> Bool {
         // Titles, subtitles, captions and notes stand on their own line.
-        let roles = ["[title: ", "[subtitle: ", "[caption: ", "[note: "]
+        if a.heading != nil || b.heading != nil { return false }
+        let roles = ["[caption: ", "[note: "]
         if [a.text, b.text].contains(where: { t in roles.contains { t.hasPrefix($0) } }) { return false }
         // Extra vertical space: a new paragraph.
         if gap > normalGap + lineHeight * 0.6 { return false }
@@ -46,6 +52,13 @@ enum ParagraphJoiner {
         let indented = b.rect.minX - left > charWidth * 1.5 && a.rect.minX - left < charWidth
         if indented && endsSentence(a.text) { return false }
         return true
+    }
+
+    /// Headings stand apart, as on the page: an empty line before a run of titles and subtitles
+    /// and after it, before the text they introduce. Headings one under the other (a title and
+    /// its subtitle) stay together.
+    private static func opensSection(_ b: TextLine, after a: TextLine) -> Bool {
+        (a.heading == nil) != (b.heading == nil)
     }
 
     /// Joins two pieces of a paragraph, mending words split with a hyphen ("infor-" + "mazione").
