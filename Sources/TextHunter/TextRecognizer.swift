@@ -5,10 +5,15 @@ import Vision
 struct TextLine {
     var text: String
     var rect: CGRect
-    /// A title or subtitle: set apart by line breaks instead of a label.
-    var heading: Heading? = nil
+    /// Text set apart from the main text (a title, a caption, a note): it keeps its own
+    /// paragraph, separated by empty lines, instead of being labelled.
+    var apart: Apart? = nil
 
-    enum Heading { case title, subtitle }
+    enum Apart {
+        case title, subtitle, caption, note
+        /// Titles and subtitles one under the other belong together, and so do captions and notes.
+        var isHeading: Bool { self == .title || self == .subtitle }
+    }
 }
 
 enum TextRecognizer {
@@ -81,11 +86,12 @@ enum TextRecognizer {
 
 /// The parts of a capture set apart from the main text. The main text (the style, size and colour,
 /// that holds the most characters) is left as it is; the rest is marked by its role:
-/// - bigger: the biggest size is the title, other bigger sizes are subtitles. These are not
-///   labelled: they keep the visual hierarchy through line breaks (see `ParagraphJoiner`);
+/// - bigger: the biggest size is the title, other bigger sizes are subtitles;
 /// - smaller, next to an image: a caption;
 /// - smaller or fainter, elsewhere: a note (a remark, a footnote, a detail).
-/// Each marked block stays on its own line, and one that wraps onto several lines stays one.
+/// None of them is labelled: each becomes a paragraph of its own, set apart by empty lines (see
+/// `ParagraphJoiner`), so the copied text keeps the page's visual hierarchy. A block that wraps
+/// onto several lines stays one.
 enum Roles {
     struct Style { var size: CGFloat; var ink: RGB? }
 
@@ -173,10 +179,9 @@ enum Roles {
                     role = nextToImage(b) ? "caption" : "note"
                 }
             }
-            if role == "title" || role == "subtitle" {
-                out.append(TextLine(text: text, rect: rect, heading: role == "title" ? .title : .subtitle))
-            } else if let role {
-                out.append(TextLine(text: "[\(role): \(text)]", rect: rect))
+            let kinds: [String: TextLine.Apart] = ["title": .title, "subtitle": .subtitle, "caption": .caption, "note": .note]
+            if let role, let kind = kinds[role] {
+                out.append(TextLine(text: text, rect: rect, apart: kind))
             } else {
                 out.append(contentsOf: b.map { lines[$0] })
             }

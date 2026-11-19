@@ -36,18 +36,16 @@ Some text is set apart from the line it sits on, and plain OCR loses it or glues
 | x² + y³ | `x[superscript: 2] + y[superscript: 3]` |
 | text on a coloured badge, "Source 1" on blue | `[blue bubble: Source 1]` |
 | a grey tag at the end of a sentence | `…of the patient. [grey bubble: Ch 1.txt + 3]` |
-| a title and a subtitle above the text | on their own lines, with an empty line before and after them |
-| smaller text under or above an image | `[caption: Figure 1. Symptoms by age]` |
-| smaller or fainter text elsewhere (a remark, a footnote, a date line) | `[note: Updated 3 March 2024]` |
+| a title and a subtitle, a caption, a note | each on its own lines, with an empty line before and after (no label) |
 
 - Superscripts and subscripts are found in the image itself. TextHunter finds each glyph of the line, works out the baseline, and reads the small glyphs that sit clearly above or below it on their own. The line is then read again without them, and the labels are put back where they were, joined to the word they touch.
 - Quotes, apostrophes, degree signs and ordinal marks (º, ª) are left as text.
 - A bubble is text whose background colour differs clearly from the rest of the capture: a whole badge, or a few words on their own colour inside a line (a source tag after a sentence). Each word is checked for the colour behind it. The label names the colour (red, orange, yellow, green, teal, blue, purple, pink, grey, dark).
-- The main text is the style (size and colour of the letters) that holds the most characters. It is copied as it is. Everything set apart from it is put on a line of its own; a block that wraps onto several lines stays one:
-  - **titles and subtitles** (at least 20% bigger than the main text) are not labelled: they keep the page's hierarchy through the layout. Each stays on its own line, never joined to the text, with an empty line before it and after it; a title and the subtitle right under it stay together;
-  - **caption**: smaller or fainter text right above or below an image;
-  - **note**: smaller or fainter text anywhere else.
-- Sizes are measured on the letters themselves, not on Vision's boxes. Text that is only bold or italic, at the same size and colour as the main text, is not marked. A capture with little main text (a single heading, a list of labels) is left as it is.
+- The main text is the style (size and colour of the letters) that holds the most characters. It is copied as it is. Text set apart from it is not labelled: it becomes a paragraph of its own, with an empty line before and after it, so the copied text keeps the page's visual hierarchy. A block that wraps onto several lines stays one. TextHunter recognises:
+  - **titles and subtitles**: at least 20% bigger than the main text. A title and the subtitle right under it stay together;
+  - **captions**: smaller or fainter text right above or below an image;
+  - **notes**: smaller or fainter text anywhere else (a remark, a footnote, a date line). Notes one under the other stay together.
+- Sizes are measured on the letters themselves, not on Vision's boxes. Text that is only bold or italic, at the same size and colour as the main text, is not set apart. A capture with little main text (a single heading, a list of labels) is left as it is.
 - Bubbles work in light and dark themes: a light grey tag on white differs from the background by only a few levels, so TextHunter compares exact colours, and checks that the patch is uniform and that the normal background comes back on both sides of it (a sidebar or a table row of another colour is not a bubble).
 - Turn it off for plain text.
 

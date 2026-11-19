@@ -38,9 +38,7 @@ enum ParagraphJoiner {
     private static func isWrap(_ a: TextLine, _ b: TextLine, gap: CGFloat, normalGap: CGFloat, lineHeight: CGFloat,
                                left: CGFloat, right: CGFloat, charWidth: CGFloat) -> Bool {
         // Titles, subtitles, captions and notes stand on their own line.
-        if a.heading != nil || b.heading != nil { return false }
-        let roles = ["[caption: ", "[note: "]
-        if [a.text, b.text].contains(where: { t in roles.contains { t.hasPrefix($0) } }) { return false }
+        if a.apart != nil || b.apart != nil { return false }
         // Extra vertical space: a new paragraph.
         if gap > normalGap + lineHeight * 0.6 { return false }
         // The next line starts a list item.
@@ -54,11 +52,11 @@ enum ParagraphJoiner {
         return true
     }
 
-    /// Headings stand apart, as on the page: an empty line before a run of titles and subtitles
-    /// and after it, before the text they introduce. Headings one under the other (a title and
-    /// its subtitle) stay together.
+    /// Titles, captions and notes stand apart, as on the page: an empty line before and after
+    /// them. A title and the subtitle right under it stay together, and so do notes one under
+    /// the other.
     private static func opensSection(_ b: TextLine, after a: TextLine) -> Bool {
-        (a.heading == nil) != (b.heading == nil)
+        a.apart?.isHeading != b.apart?.isHeading
     }
 
     /// Joins two pieces of a paragraph, mending words split with a hyphen ("infor-" + "mazione").

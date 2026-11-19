@@ -49,7 +49,7 @@ struct SettingsView: View {
                     caption("Lines that break only for lack of room are joined, so paragraphs copy as running text.")
                     Toggle("Label special text", isOn: $prefs.labelSpecialText)
                         .padding(.top, 4)
-                    caption("The main text stays as it is. Titles keep their own lines, set apart by empty lines; captions, notes, superscripts, subscripts and text on coloured bubbles are marked, e.g. [caption: Figure 1…], [superscript: 17] or [blue bubble: Source 1].")
+                    caption("The main text stays as it is; titles, captions and notes become paragraphs of their own. Superscripts, subscripts and text on coloured bubbles are marked, e.g. [superscript: 17] or [blue bubble: Source 1].")
                 }
             }
             GridRow {
