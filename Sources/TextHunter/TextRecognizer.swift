@@ -1,0 +1,54 @@
+import CoreGraphics
+import Vision
+
+/// One visual line of recognised text. Coordinates are in image pixels, origin bottom-left.
+struct TextLine {
+    var text: String
+    var rect: CGRect
+}
+
+enum TextRecognizer {
+    /// Spaces, line breaks and invisible characters (zero-width space, BOM) trimmed from every line.
+    static let blank = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{200B}\u{200C}\u{200D}\u{2060}\u{FEFF}"))
+
+    /// Recognises the text in `image` with Apple's on-device OCR and returns it as visual lines,
+    /// top to bottom. Pieces of text that Vision reports separately but that sit on the same
+    /// line are merged left to right.
+    static func recognize(_ image: CGImage) throws -> [TextLine] {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.automaticallyDetectsLanguage = true
+        request.recognitionLanguages = ["it-IT", "en-US"]
+
+        try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
+
+        let w = CGFloat(image.width), h = CGFloat(image.height)
+        let pieces: [TextLine] = (request.results ?? []).compactMap { obs in
+            guard let text = obs.topCandidates(1).first?.string.trimmingCharacters(in: Self.blank),
+                  !text.isEmpty else { return nil }
+            let b = obs.boundingBox
+            return TextLine(text: text, rect: CGRect(x: b.minX * w, y: b.minY * h, width: b.width * w, height: b.height * h))
+        }
+        return groupIntoLines(pieces)
+    }
+
+    /// Groups pieces whose vertical centres are close into one line, ordered top to bottom.
+    static func groupIntoLines(_ pieces: [TextLine]) -> [TextLine] {
+        let sorted = pieces.sorted { $0.rect.midY > $1.rect.midY }
+        var lines: [[TextLine]] = []
+        for piece in sorted {
+            if let last = lines.last?.first,
+               abs(last.rect.midY - piece.rect.midY) < min(last.rect.height, piece.rect.height) * 0.5 {
+                lines[lines.count - 1].append(piece)
+            } else {
+                lines.append([piece])
+            }
+        }
+        return lines.map { group in
+            let ordered = group.sorted { $0.rect.minX < $1.rect.minX }
+            return TextLine(text: ordered.map(\.text).joined(separator: " "),
+                            rect: ordered.dropFirst().reduce(ordered[0].rect) { $0.union($1.rect) })
+        }
+    }
+}
