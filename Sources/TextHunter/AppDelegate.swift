@@ -106,6 +106,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let join = Prefs.shared.joinWrappedLines
             let label = Prefs.shared.labelSpecialText
             DispatchQueue.global(qos: .userInitiated).async {
+                // Debug only (`defaults write local.texthunter.TextHunter debugKeepLastCapture -bool true`):
+                // keeps the last capture in ~/Library/Caches/TextHunter to reproduce a wrong reading.
+                if UserDefaults.standard.bool(forKey: "debugKeepLastCapture") {
+                    let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("TextHunter")
+                    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                    if let d = CGImageDestinationCreateWithURL(dir.appendingPathComponent("last-capture.png") as CFURL, "public.png" as CFString, 1, nil) {
+                        CGImageDestinationAddImage(d, image, nil)
+                        CGImageDestinationFinalize(d)
+                    }
+                }
                 let lines = (try? TextRecognizer.recognize(image, labelSpecialText: label)) ?? []
                 let text = ParagraphJoiner.text(from: lines, joinWrappedLines: join)
                     .trimmingCharacters(in: TextRecognizer.blank)

@@ -22,7 +22,18 @@ enum SpecialText {
         let area = rect.width * rect.height
         guard area < CGFloat(bitmap.width * bitmap.height) * 0.5 else { return nil }
         let region = bitmap.topDown(rect.insetBy(dx: -rect.height * 0.1, dy: -rect.height * 0.1))
-        guard let local = bitmap.dominant(in: region, step: 1), local.distance(to: background) > 70 else { return nil }
+        // Same test as for bubbles inside a line: a clearly different colour that fills most of
+        // the box (a dark grey tag on black differs by only about 20 per channel).
+        guard let local = bitmap.dominant(in: region, step: 1), local.distance(to: background) > 40,
+              bitmap.share(of: local, in: region) > 0.45 else { return nil }
+        // A bubble ends: beside it, left and right, the normal background comes back. A panel or
+        // sidebar of another colour goes on, and its text is not a bubble.
+        let h = rect.height
+        for x in [rect.minX - h * 1.5, rect.maxX + h * 1.5] {
+            let strip = bitmap.topDown(CGRect(x: x - h * 0.15, y: rect.minY, width: h * 0.3, height: h))
+            guard x >= 0, x < CGFloat(bitmap.width), strip.width > 0 else { continue }   // edge of the capture
+            if let side = bitmap.dominant(in: strip, step: 1), side.distance(to: background) > 30 { return nil }
+        }
         return local.name(on: background)
     }
 
