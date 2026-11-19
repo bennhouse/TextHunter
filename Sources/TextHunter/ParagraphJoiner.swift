@@ -12,7 +12,10 @@ enum ParagraphJoiner {
         }
 
         let left = lines.map(\.rect.minX).min()!
-        let right = lines.map(\.rect.maxX).max()!
+        // The right margin of the text. A bubble after the last word (a source tag) sticks out
+        // past it and would make every full line look short.
+        let textLines = lines.filter { !$0.text.contains(" bubble: ") }
+        let right = (textLines.isEmpty ? lines : textLines).map(\.rect.maxX).max()!
         let charWidth = median(lines.map { $0.rect.width / CGFloat(max($0.text.count, 1)) })
         let lineHeight = median(lines.map(\.rect.height))
         let gaps = zip(lines, lines.dropFirst()).map { $0.rect.minY - $1.rect.maxY }
@@ -26,7 +29,10 @@ enum ParagraphJoiner {
             let a = lines[i - 1], b = lines[i]
             let wrapped = wideEnough && isWrap(a, b, gap: gaps[i - 1], normalGap: normalGap, lineHeight: lineHeight,
                                                left: left, right: right, charWidth: charWidth)
-            if opensSection(b, after: a) {
+            // Extra vertical space on the page (around a heading, between spaced paragraphs or
+            // list items) becomes an empty line, so the copied text keeps the page's hierarchy.
+            let spaced = gaps[i - 1] > normalGap + lineHeight * 0.6
+            if opensSection(b, after: a) || (!wrapped && spaced) {
                 out += "\n\n" + b.text
             } else {
                 out = wrapped ? join(out, b.text) : out + "\n" + b.text
@@ -48,7 +54,8 @@ enum ParagraphJoiner {
         if right - a.rect.maxX > charWidth * CGFloat(firstWord + 2) { return false }
         // First-line indent after a finished sentence: a new paragraph.
         let indented = b.rect.minX - left > charWidth * 1.5 && a.rect.minX - left < charWidth
-        if indented && endsSentence(a.text) { return false }
+        // (Not under the first line of a list item: there the indent is the item's own text.)
+        if indented && endsSentence(a.text) && !startsListItem(a.text) { return false }
         return true
     }
 

@@ -20,7 +20,7 @@ Text copied from a book or an article usually breaks at the end of every line. W
 
 - A line break is removed when the line ended only because it ran out of room, that is when the first word of the next line would not have fitted.
 - Words split with a hyphen at the end of a line are mended ("infor-" + "mation" → "information").
-- Real breaks are kept: the end of a paragraph, extra space between paragraphs, a first-line indent after a full stop, list items, headings and other short lines.
+- Real breaks are kept: the end of a paragraph, a first-line indent after a full stop, list items, headings and other short lines. Where the page has extra space (between spaced paragraphs, around a heading), the copied text has an empty line.
 - Narrow blocks such as lists of single words are left as they are.
 
 This is a heuristic. It works well on running text but can join lines it should not in poems, code or tables. In that case, turn the option off in Settings.
