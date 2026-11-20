@@ -19,9 +19,10 @@ if args.count >= 3, args[1] == "--ocr" {
 if args.count >= 3, args[1] == "--render-settings" {
     _ = NSApplication.shared
     if args.contains("--conflict") {
-        Prefs.shared.proposeShortcut(Shortcut(keyCode: 21, modifiers: NSEvent.ModifierFlags([.command, .shift]).rawValue))
+        Prefs.shared.proposeShortcut(Shortcut(keyCode: 21, modifiers: NSEvent.ModifierFlags([.command, .shift]).rawValue), for: .capture)
     }
-    let host: NSView = args.contains("--welcome") ? NSHostingView(rootView: WelcomeView {}) : NSHostingView(rootView: SettingsView())
+    let host: NSView = args.contains("--welcome") ? NSHostingView(rootView: AnyView(WelcomeView {}.background(Color(nsColor: .windowBackgroundColor))))
+        : NSHostingView(rootView: AnyView(SettingsView().background(Color(nsColor: .windowBackgroundColor))))
     let size = host.fittingSize
     let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled], backing: .buffered, defer: false)
     window.contentView = host
@@ -30,6 +31,41 @@ if args.count >= 3, args[1] == "--render-settings" {
     host.cacheDisplay(in: host.bounds, to: rep)
     try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
     exit(0)
+}
+
+// Developer mode: `TextHunter --render-scratchpad <png> [--dark] [--preview] [--format]` draws the Scratchpad with
+// sample text to an image (the saved note is left alone).
+if args.count >= 3, args[1] == "--render-scratchpad" {
+    _ = NSApplication.shared
+    if args.contains("--dark") { NSApp.appearance = NSAppearance(named: .darkAqua) }
+    let pad = ScratchpadController.shared
+    pad.savingDisabled = true
+    pad.text = args.contains("--empty") ? "" : """
+    # Shopping
+    - [x] Coffee
+    - [ ] Milk and **bread**
+    1. First *idea*
+    2. Second with `code`
+    > A quote ~~struck~~
+    Plain line with a [link](https://example.com).
+    """
+    pad.isPreviewing = args.contains("--preview")
+    pad.showsFormatBar = args.contains("--format")
+    let host = NSHostingView(rootView: ScratchpadView().background(Color(nsColor: .windowBackgroundColor)))
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    window.appearance = NSApp.appearance
+    window.contentView = host
+    window.layoutIfNeeded()
+    host.layoutSubtreeIfNeeded()
+    let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+    host.cacheDisplay(in: host.bounds, to: rep)
+    try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: args[2]))
+    exit(0)
+}
+
+if args.count >= 2, args[1] == "--selftest-scratchpad" {
+    _ = NSApplication.shared
+    exit(ScratchpadSelfTest.run() ? 0 : 1)
 }
 
 let app = NSApplication.shared

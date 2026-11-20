@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2
+
+- New icon: the suite's colour icons, TextHunter in teal.
+- **Scratchpad**: a floating note for short-lived text, opened and closed with ⇧⌘T (changeable in Settings) or from the menu. Its text is saved as you type and kept across openings and restarts.
+  - Pin to keep it open; unpinned, it closes at a click elsewhere. It takes the keyboard without making TextHunter the active app.
+  - Formatting row (Markdown marks), formatted preview, copy all, export to a file, clear with undo, ⌘F search, lists that continue on Return.
+- Settings has a second shortcut field, for the Scratchpad. Shortcuts are registered exclusively, so other apps using the same keys don't get them. Each shortcut shows its own messages, and the two can't be the same.
+
 ## 1.1
 
 - **Label special text** (on by default, in Settings):

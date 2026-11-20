@@ -36,10 +36,17 @@ struct SettingsView: View {
     var body: some View {
         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 20) {
             GridRow {
-                label("Shortcut:")
+                label("Capture:")
                 VStack(alignment: .leading, spacing: 6) {
-                    ShortcutRecorder()
-                    ShortcutStatusView(width: detailWidth)
+                    ShortcutRecorder(action: .capture)
+                    ShortcutStatusView(action: .capture, width: detailWidth)
+                }
+            }
+            GridRow {
+                label("\(Scratchpad.name):")
+                VStack(alignment: .leading, spacing: 6) {
+                    ShortcutRecorder(action: .scratchpad)
+                    ShortcutStatusView(action: .scratchpad, width: detailWidth)
                 }
             }
             GridRow {
@@ -82,17 +89,22 @@ struct SettingsView: View {
 /// The grey line under the shortcut field: a hint, or the outcome of the last recording.
 struct ShortcutStatusView: View {
     @ObservedObject private var prefs = Prefs.shared
+    let action: ShortcutAction
     let width: CGFloat
+
+    /// The status line only shows under the field it belongs to.
+    private var status: ShortcutStatus? { prefs.shortcutStatus?.action == action ? prefs.shortcutStatus : nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(prefs.shortcutStatus?.message ?? "Click the field, then press the new keys.")
+            Text(status?.message ?? (action == .capture ? "Click the field, then press the new keys."
+                                                        : "Shows or hides the \(Scratchpad.name.lowercased()), a note that keeps its text."))
                 .font(.caption).foregroundStyle(.secondary)
                 .frame(width: width, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .id(prefs.shortcutStatus?.message) // cross-fade when the text changes
+                .id(status?.message) // cross-fade when the text changes
                 .transition(.opacity)
-            if let status = prefs.shortcutStatus, status.pending != nil || status.keyboardSettingsLink || status.accessibilityLink {
+            if let status, status.pending != nil || status.keyboardSettingsLink || status.accessibilityLink {
                 HStack(spacing: 8) {
                     if status.pending != nil {
                         Button("Use Shortcut") { prefs.confirmPending() }
@@ -109,7 +121,7 @@ struct ShortcutStatusView: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: prefs.shortcutStatus)
+        .animation(.easeInOut(duration: 0.2), value: status)
     }
 }
 

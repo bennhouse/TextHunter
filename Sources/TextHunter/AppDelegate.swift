@@ -4,6 +4,7 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var icon: StatusIcon!
     private let captureItem = NSMenuItem(title: "Start Capture", action: #selector(startCapture), keyEquivalent: "")
+    private let scratchpadItem = NSMenuItem(title: "Open \(Scratchpad.name)", action: #selector(toggleScratchpad), keyEquivalent: "")
     private var busy = false
     private var cancellables: Set<AnyCancellable> = []
 
@@ -15,6 +16,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         captureItem.target = self
         menu.addItem(captureItem)
+        scratchpadItem.target = self
+        menu.addItem(scratchpadItem)
+        menu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
@@ -25,11 +29,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Quit TextHunter", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         icon.item.menu = menu
 
-        HotKeyManager.shared.onPress = { [weak self] in self?.startCapture() }
-        Prefs.shared.activateShortcut()
-        Prefs.shared.$shortcut.combineLatest(Prefs.shared.$shortcutActive)
-            .sink { [weak self] shortcut, active in self?.showShortcutInMenu(active ? shortcut : nil) }
+        HotKeyManager.shared.onPress = { [weak self] action in
+            switch action {
+            case .capture: self?.startCapture()
+            case .scratchpad: self?.toggleScratchpad()
+            }
+        }
+        Prefs.shared.activateShortcuts()
+        Prefs.shared.$shortcuts.combineLatest(Prefs.shared.$inactiveShortcuts)
+            .sink { [weak self] shortcuts, inactive in
+                guard let self else { return }
+                Self.show(inactive.contains(.capture) ? nil : shortcuts[.capture], in: self.captureItem)
+                Self.show(inactive.contains(.scratchpad) ? nil : shortcuts[.scratchpad], in: self.scratchpadItem)
+            }
             .store(in: &cancellables)
+
+        // Development aid: open the Scratchpad at launch (to check the real window).
+        if ProcessInfo.processInfo.environment["TEXTHUNTER_OPEN_SCRATCHPAD"] == "1" {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { ScratchpadController.shared.show() }
+        }
 
         // First launch after installation: ask for the permissions together, as a welcome.
         if !UserDefaults.standard.bool(forKey: Permissions.welcomeKey) {
@@ -60,6 +78,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         edit.addItem(NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
         edit.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
         edit.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        edit.addItem(.separator())
+        for (title, key, action) in [("Find…", "f", NSTextFinder.Action.showFindInterface),
+                                     ("Find Next", "g", .nextMatch), ("Find Previous", "G", .previousMatch)] {
+            let item = NSMenuItem(title: title, action: #selector(NSTextView.performFindPanelAction(_:)), keyEquivalent: key)
+            item.tag = action.rawValue
+            edit.addItem(item)
+        }
         editItem.submenu = edit
         main.addItem(editItem)
 
@@ -78,11 +103,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         HotKeyManager.shared.resumeAfterRecording()
+        ScratchpadController.shared.flushSave()
     }
 
-    private func showShortcutInMenu(_ shortcut: Shortcut?) {
-        captureItem.keyEquivalent = shortcut?.menuKeyEquivalent ?? ""
-        captureItem.keyEquivalentModifierMask = shortcut?.flags ?? []
+    private static func show(_ shortcut: Shortcut?, in item: NSMenuItem) {
+        item.keyEquivalent = shortcut?.menuKeyEquivalent ?? ""
+        item.keyEquivalentModifierMask = shortcut?.flags ?? []
+    }
+
+    @objc func toggleScratchpad() {
+        ScratchpadController.shared.toggle()
     }
 
     @objc private func openSettings() {

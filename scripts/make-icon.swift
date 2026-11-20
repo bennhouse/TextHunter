@@ -58,10 +58,10 @@ func draw(_ px: Int) -> Data {
         ctx.restoreGState()
     }
 
-    // Base: matte graphite, lighter at the top.
+    // Base: the app colour, lighter at the top.
     ctx.saveGState()
     ctx.addPath(squircle); ctx.clip()
-    ctx.drawLinearGradient(grad([c(112, 114, 121), c(86, 88, 95), c(66, 68, 74)], [0, 0.5, 1]),
+    ctx.drawLinearGradient(grad([c(68, 128, 141), c(54, 104, 118), c(34, 77, 91)], [0, 0.5, 1]),
                            start: CGPoint(x: 0, y: rect.maxY), end: CGPoint(x: 0, y: rect.minY), options: [])
     ctx.restoreGState()
 
@@ -74,7 +74,7 @@ func draw(_ px: Int) -> Data {
         let box = path.boundingBoxOfPath
         for (off, blur, a) in [(0.16, 0.22, shadowAlpha), (0.5, 1.0, shadowAlpha * 0.65)] as [(CGFloat, CGFloat, CGFloat)] {
             ctx.saveGState()
-            ctx.setShadow(offset: CGSize(width: 0, height: -u * off), blur: u * blur, color: c(20, 20, 26, a))
+            ctx.setShadow(offset: CGSize(width: 0, height: -u * off), blur: u * blur, color: c(20, 20, 26, a * 0.55))
             ctx.addPath(path); ctx.setFillColor(bottom); ctx.fillPath()
             ctx.restoreGState()
         }
@@ -122,8 +122,8 @@ func draw(_ px: Int) -> Data {
     let lineH: CGFloat = 0.95, x0: CGFloat = 8 - 5.6 / 2
     let lines: [(CGFloat, CGFloat)] = [(10, 5.6), (8, 5.6), (6, 3.8)]
 
-    let gray = (c(206, 204, 200), c(176, 174, 171))
-    let white = (c(250, 249, 247), c(222, 219, 216))
+    let gray = (c(255, 255, 255, 0.36), c(255, 255, 255, 0.29))
+    let white = (c(255, 255, 255, 0.60), c(255, 255, 255, 0.50))
     for b in brackets { material(b, top: gray.0, bottom: gray.1, shadowAlpha: 0.38) }
     for (y, len) in lines {
         let rr = CGRect(x: P(x0, y - lineH / 2).x, y: P(x0, y - lineH / 2).y, width: len * u, height: lineH * u)

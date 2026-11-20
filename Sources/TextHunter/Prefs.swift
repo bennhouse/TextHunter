@@ -3,6 +3,8 @@ import ServiceManagement
 
 /// A short line of feedback shown under the shortcut field in Settings (no alerts).
 struct ShortcutStatus: Equatable {
+    /// The shortcut field the line belongs to.
+    var action: ShortcutAction = .capture
     var message: String
     /// A shortcut used by macOS, waiting for the user to confirm the takeover.
     var pending: Shortcut?
@@ -17,9 +19,9 @@ final class Prefs: ObservableObject {
     static let shared = Prefs()
     private let defaults = UserDefaults.standard
 
-    @Published private(set) var shortcut: Shortcut
-    /// False when the shortcut could not be registered because another app owns it.
-    @Published private(set) var shortcutActive = true
+    @Published private(set) var shortcuts: [ShortcutAction: Shortcut] = [:]
+    /// The actions whose shortcut could not be registered because another app owns it.
+    @Published private(set) var inactiveShortcuts: Set<ShortcutAction> = []
     @Published private(set) var shortcutStatus: ShortcutStatus?
     @Published var joinWrappedLines: Bool {
         didSet { defaults.set(joinWrappedLines, forKey: "joinWrappedLines") }
@@ -35,58 +37,76 @@ final class Prefs: ObservableObject {
         defaults.register(defaults: ["joinWrappedLines": true, "labelSpecialText": true])
         joinWrappedLines = defaults.bool(forKey: "joinWrappedLines")
         labelSpecialText = defaults.bool(forKey: "labelSpecialText")
-        if let data = defaults.data(forKey: "shortcut"), let s = try? JSONDecoder().decode(Shortcut.self, from: data) {
-            shortcut = s
-        } else {
-            shortcut = .default
+        var saved: [ShortcutAction: Shortcut] = [:]
+        for action in ShortcutAction.allCases {
+            if let data = defaults.data(forKey: action.defaultsKey), let s = try? JSONDecoder().decode(Shortcut.self, from: data) {
+                saved[action] = s
+            } else {
+                saved[action] = action.defaultShortcut
+            }
         }
         launchAtLogin = SMAppService.mainApp.status == .enabled
+        shortcuts = saved
     }
 
-    /// Registers the saved shortcut at launch.
-    func activateShortcut() {
-        shortcutActive = HotKeyManager.shared.register(shortcut)
-        if !shortcutActive {
-            show(ShortcutStatus(message: "\(shortcut.displayString) is used by another app. Choose a different shortcut."))
+    func shortcut(for action: ShortcutAction) -> Shortcut { shortcuts[action] ?? action.defaultShortcut }
+
+    /// Registers the saved shortcuts at launch.
+    func activateShortcuts() {
+        for action in ShortcutAction.allCases {
+            let shortcut = shortcut(for: action)
+            if HotKeyManager.shared.register(shortcut, for: action) {
+                inactiveShortcuts.remove(action)
+            } else {
+                inactiveShortcuts.insert(action)
+                show(ShortcutStatus(action: action, message: "\(shortcut.displayString) is used by another app. Choose a different shortcut."))
+            }
         }
     }
 
-    // MARK: - Changing the shortcut
+    // MARK: - Changing a shortcut
 
-    /// Called with the keys the user just recorded.
-    func proposeShortcut(_ new: Shortcut) {
-        if new == shortcut && shortcutActive {
-            show(ShortcutStatus(message: "TextHunter already uses \(new.displayString)."), autoClear: true)
+    /// Called with the keys the user just recorded for `action`.
+    func proposeShortcut(_ new: Shortcut, for action: ShortcutAction) {
+        if new == shortcut(for: action) && !inactiveShortcuts.contains(action) {
+            show(ShortcutStatus(action: action, message: "TextHunter already uses \(new.displayString) for this."), autoClear: true)
+            return
+        }
+        if let other = ShortcutAction.allCases.first(where: { $0 != action && shortcut(for: $0) == new }) {
+            show(ShortcutStatus(action: action, message: "\(new.displayString) is already used for “\(other.title)”. Choose a different shortcut."))
             return
         }
         if let conflict = ShortcutConflicts.systemConflict(for: new) {
             if let id = conflict.id {
                 show(ShortcutStatus(
+                    action: action,
                     message: "macOS uses \(new.displayString) for “\(conflict.name)”. TextHunter can take it over and turn the macOS shortcut off.",
                     pending: new, pendingSystemID: id))
             } else {
                 show(ShortcutStatus(
+                    action: action,
                     message: "macOS uses \(new.displayString) for a system action TextHunter can’t turn off. Turn it off in Keyboard Shortcuts, or choose another shortcut.",
                     pending: new, keyboardSettingsLink: true))
             }
             return
         }
-        apply(new, disablingSystemShortcut: nil)
+        apply(new, for: action, disablingSystemShortcut: nil)
     }
 
     func confirmPending() {
         guard let status = shortcutStatus, let new = status.pending else { return }
-        apply(new, disablingSystemShortcut: status.pendingSystemID)
+        apply(new, for: status.action, disablingSystemShortcut: status.pendingSystemID)
     }
 
     private static let recordingMessage = "Recording: other shortcuts are paused. Esc cancels."
 
     /// While recording. Without Accessibility access, keys already in use can't reach the field.
-    func showRecordingHint() {
+    func showRecordingHint(for action: ShortcutAction) {
         if AXIsProcessTrusted() {
-            show(ShortcutStatus(message: Self.recordingMessage))
+            show(ShortcutStatus(action: action, message: Self.recordingMessage))
         } else {
             show(ShortcutStatus(
+                action: action,
                 message: "Keys that macOS or another app already uses can only be recorded with Accessibility access.",
                 accessibilityLink: true))
         }
@@ -101,26 +121,27 @@ final class Prefs: ObservableObject {
         show(nil)
     }
 
-    private func apply(_ new: Shortcut, disablingSystemShortcut id: Int?) {
-        guard HotKeyManager.shared.register(new) else {
-            show(ShortcutStatus(message: "\(new.displayString) is used by another app. Choose a different shortcut."))
+    private func apply(_ new: Shortcut, for action: ShortcutAction, disablingSystemShortcut id: Int?) {
+        guard HotKeyManager.shared.register(new, for: action) else {
+            show(ShortcutStatus(action: action, message: "\(new.displayString) is used by another app. Choose a different shortcut."))
             return
         }
-        ShortcutConflicts.restoreDisabled(keeping: new)
-        shortcut = new
-        shortcutActive = true
-        defaults.set(try? JSONEncoder().encode(new), forKey: "shortcut")
+        shortcuts[action] = new
+        inactiveShortcuts.remove(action)
+        defaults.set(try? JSONEncoder().encode(new), forKey: action.defaultsKey)
+        ShortcutConflicts.restoreDisabled(keeping: ShortcutAction.allCases.map { shortcut(for: $0) })
 
         if let id {
             if ShortcutConflicts.disable(id, shortcut: new) {
-                show(ShortcutStatus(message: "Shortcut set to \(new.displayString). The macOS shortcut is now off."), autoClear: true)
+                show(ShortcutStatus(action: action, message: "Shortcut set to \(new.displayString). The macOS shortcut is now off."), autoClear: true)
             } else {
                 show(ShortcutStatus(
+                    action: action,
                     message: "Shortcut set to \(new.displayString), but macOS hasn’t released it yet. Turn it off in Keyboard Shortcuts.",
                     keyboardSettingsLink: true))
             }
         } else {
-            show(ShortcutStatus(message: "Shortcut set to \(new.displayString)."), autoClear: true)
+            show(ShortcutStatus(action: action, message: "Shortcut set to \(new.displayString)."), autoClear: true)
         }
     }
 

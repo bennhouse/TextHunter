@@ -4,6 +4,8 @@
 
 TextHunter lives in the Mac menu bar and copies the text from any part of the screen. Press the shortcut, drag over the text you want, and the text is on the clipboard. There is no window, no preview and no screenshot left behind.
 
+It also has a **Scratchpad**: a floating note you call up with ⇧⌘T, for text you need for a moment. It keeps its text from one opening to the next.
+
 ## How it works
 
 1. Choose **Start Capture** from the menu bar icon, or press the shortcut (⇧⌘2 by default).
@@ -49,12 +51,29 @@ Some text is set apart from the line it sits on, and plain OCR loses it or glues
 - Bubbles work in light and dark themes: a light grey tag on white differs from the background by only a few levels, so TextHunter compares exact colours, and checks that the patch is uniform and that the normal background comes back on both sides of it (a sidebar or a table row of another colour is not a bubble).
 - Turn it off for plain text.
 
+## Scratchpad
+
+A floating note for short-lived text: a phone number, a few lines to paste later, a list. Press ⇧⌘T (or choose **Open Scratchpad** from the menu bar icon) to open it, and press it again to close it.
+
+- **It keeps its text.** Closing it, quitting TextHunter or restarting the Mac doesn't lose anything: the text is saved as you type, in `~/Library/Application Support/TextHunter/Scratchpad.md`, and stays on this Mac.
+- **It doesn't take over.** It opens above other windows and takes the keyboard, but the app you were using stays the active one.
+- **Drag its top bar** to move it, and its edges to resize it. It opens where you left it.
+- **Pin** (top right): unpinned, the Scratchpad closes when you click somewhere else; pinned, it stays open until you close it. It unpins itself when it closes. **×** or ⌘W closes it.
+- Buttons at the bottom:
+  - **Aa** shows a formatting row: heading, bold, italic, strikethrough, bulleted and numbered lists, checklist, quote, code and link. They insert Markdown marks around the selection or at the start of the selected lines, and remove them when pressed again.
+  - **Eye** shows the text formatted (headings, lists, checkboxes, quotes, code, links); the pencil goes back to editing.
+  - **Copy all** puts the whole text on the clipboard.
+  - **Export** saves it as a text file (.txt; type another extension, such as .md, to change it).
+  - **Trash** clears it. ⌘Z brings the text back.
+- Return in a list item starts the next item (numbered lists count on, checkboxes start unchecked); Return on an empty item ends the list. ⌘F searches the text.
+
 ## Settings
 
-- **Shortcut**: click the field and press the new keys. The shortcut needs at least one of ⌘, ⌥ or ⌃ (F-keys can be used alone).
+- **Capture** and **Scratchpad** shortcuts: click a field and press the new keys. The shortcut needs at least one of ⌘, ⌥ or ⌃ (F-keys can be used alone).
   - It takes priority over shortcuts inside apps.
   - If macOS uses the same keys (for example ⇧⌘4 or ⌘Space), TextHunter says which macOS shortcut it is and, if you confirm, turns that macOS shortcut off. It is turned back on when you choose a different shortcut for TextHunter.
   - If another app already uses the keys as a global shortcut, macOS does not let TextHunter take them, and TextHunter asks you to choose another one.
+  - The two shortcuts must differ. TextHunter registers them exclusively: while it runs, ⇧⌘T always opens the Scratchpad, ahead of ⇧⌘T in any app (in browsers, “reopen closed tab”) and of other apps' global shortcuts on the same keys, which stop working.
 - **Join wrapped lines**: see above.
 - **Label special text**: see above.
 - **Launch at login**.
@@ -65,7 +84,7 @@ macOS 15 Sequoia or later, Apple Silicon or Intel.
 
 ## Install
 
-1. Download `TextHunter-1.1.dmg` from [Releases](../../releases) and drag TextHunter to Applications.
+1. Download `TextHunter-1.2.dmg` from [Releases](../../releases) and drag TextHunter to Applications.
 2. TextHunter is not notarized, so macOS blocks it the first time. Open System Settings › Privacy & Security, scroll down and click **Open Anyway**. You can also clear the quarantine flag from Terminal:
    ```
    xattr -dr com.apple.quarantine /Applications/TextHunter.app
@@ -80,19 +99,20 @@ If TextHunter took over a macOS shortcut, first set TextHunter's shortcut to som
 
 ```
 rm -rf /Applications/TextHunter.app
+rm -rf ~/Library/Application\ Support/TextHunter
 defaults delete local.texthunter.TextHunter
 tccutil reset ScreenCapture local.texthunter.TextHunter
 tccutil reset Accessibility local.texthunter.TextHunter
 ```
 
-The last two lines remove TextHunter from the Screen Recording and Accessibility lists in System Settings.
+The second line deletes the Scratchpad's text. The last two lines remove TextHunter from the Screen Recording and Accessibility lists in System Settings.
 
 ## Build from source
 
 You need the Xcode Command Line Tools (Swift 6).
 
 ```
-scripts/build-app.sh          # build, sign and install ~/Applications/TextHunter.app
+scripts/build-app.sh          # build, sign, install /Applications/TextHunter.app and launch it
 scripts/make-dmg.sh           # universal build/TextHunter-<version>.dmg
 swift scripts/make-icon.swift <dir>   # regenerate the app icon
 ```
@@ -105,6 +125,16 @@ To check recognition on an image file without capturing:
 .build/release/TextHunter --ocr image.png          # with wrapped lines joined
 .build/release/TextHunter --ocr image.png --raw    # one line per recognised line
 ```
+
+Other developer modes:
+
+```
+.build/release/TextHunter --selftest-scratchpad    # formatting marks, lists, clear and undo
+.build/release/TextHunter --render-scratchpad out.png [--dark] [--preview] [--format]
+.build/release/TextHunter --render-settings out.png [--conflict | --welcome]
+```
+
+`TEXTHUNTER_OPEN_SCRATCHPAD=1` in the environment opens the Scratchpad at launch.
 
 ## Things to know
 

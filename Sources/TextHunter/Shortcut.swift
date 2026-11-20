@@ -7,6 +7,7 @@ struct Shortcut: Codable, Equatable {
     var modifiers: UInt
 
     static let `default` = Shortcut(keyCode: UInt16(kVK_ANSI_2), modifiers: NSEvent.ModifierFlags([.command, .shift]).rawValue)
+    static let scratchpadDefault = Shortcut(keyCode: UInt16(kVK_ANSI_T), modifiers: NSEvent.ModifierFlags([.command, .shift]).rawValue)
     static let relevantModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
 
     init(keyCode: UInt16, modifiers: UInt) {

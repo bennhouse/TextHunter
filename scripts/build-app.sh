@@ -1,6 +1,6 @@
 #!/bin/zsh
-# Builds TextHunter with SwiftPM, assembles build/TextHunter.app, signs it and installs it
-# in ~/Applications.
+# Builds TextHunter with SwiftPM, assembles build/TextHunter.app, signs it, installs it in
+# /Applications (replacing the copy there) and launches it.
 #   scripts/build-app.sh             build, sign, install
 #   NO_INSTALL=1 scripts/build-app.sh  only build/TextHunter.app
 #   UNIVERSAL=1 ...                    Apple Silicon + Intel binary (for releases)
@@ -50,10 +50,10 @@ codesign -d -r- "$APP" 2>&1 | grep designated
 
 if [[ "${NO_INSTALL:-0}" != "1" ]]; then
     osascript -e 'tell application id "local.texthunter.TextHunter" to quit' 2>/dev/null || true
-    mkdir -p "$HOME/Applications"
-    rm -rf "$HOME/Applications/TextHunter.app"
-    ditto "$APP" "$HOME/Applications/TextHunter.app"
-    echo "Installed $HOME/Applications/TextHunter.app"
+    rm -rf "/Applications/TextHunter.app"
+    ditto "$APP" "/Applications/TextHunter.app"
+    open "/Applications/TextHunter.app"
+    echo "Installed and launched /Applications/TextHunter.app"
 else
     echo "Built $PWD/$APP"
 fi

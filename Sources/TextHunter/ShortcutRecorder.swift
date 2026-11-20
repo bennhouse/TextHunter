@@ -4,16 +4,19 @@ import SwiftUI
 /// SwiftUI wrapper of the AppKit recorder field.
 struct ShortcutRecorder: NSViewRepresentable {
     @ObservedObject private var prefs = Prefs.shared
+    var action: ShortcutAction = .capture
 
     func makeNSView(context: Context) -> RecorderField {
         let field = RecorderField()
-        field.onRecord = { Prefs.shared.proposeShortcut($0) }
+        let action = action
+        field.action = action
+        field.onRecord = { Prefs.shared.proposeShortcut($0, for: action) }
         field.onStart = { Prefs.shared.cancelPending() }
         return field
     }
 
     func updateNSView(_ field: RecorderField, context: Context) {
-        field.shortcut = prefs.shortcut
+        field.shortcut = prefs.shortcut(for: action)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: RecorderField, context: Context) -> CGSize? {
@@ -30,6 +33,7 @@ struct ShortcutRecorder: NSViewRepresentable {
 final class RecorderField: NSView {
     var onRecord: ((Shortcut) -> Void)?
     var onStart: (() -> Void)?
+    var action: ShortcutAction = .capture
     var shortcut: Shortcut = .default { didSet { if !recording { refresh() } } }
 
     private let label = NSTextField(labelWithString: "")
@@ -118,7 +122,7 @@ final class RecorderField: NSView {
         hint = nil
         onStart?()
         HotKeyManager.shared.pauseForRecording()
-        Prefs.shared.showRecordingHint()
+        Prefs.shared.showRecordingHint(for: action)
         appObserver = NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
             self?.stop()
         }

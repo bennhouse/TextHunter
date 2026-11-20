@@ -64,8 +64,9 @@ enum ShortcutConflicts {
         return !activeSystemShortcutExists(shortcut)
     }
 
-    /// Turns back on the system shortcuts TextHunter turned off, except one that uses `shortcut`.
-    static func restoreDisabled(keeping shortcut: Shortcut?) {
+    /// Turns back on the system shortcuts TextHunter turned off, except those that use one of `kept`
+    /// (the shortcuts TextHunter still uses).
+    static func restoreDisabled(keeping kept: [Shortcut]) {
         let remembered = UserDefaults.standard.array(forKey: disabledKey) as? [Int] ?? []
         guard !remembered.isEmpty else { return }
         guard var all = symbolicHotKeys(), !all.isEmpty else { return }
@@ -73,7 +74,7 @@ enum ShortcutConflicts {
         var changed = false
         for id in remembered {
             guard var entry = all[String(id)] as? [String: Any] else { continue }
-            if let shortcut, combo(of: entry) == shortcut { still.append(id); continue }
+            if let c = combo(of: entry), kept.contains(c) { still.append(id); continue }
             entry["enabled"] = true
             all[String(id)] = entry
             changed = true
