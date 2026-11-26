@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- New icon, redrawn with the rest of the suite from one shared design (same glass parts, light, shadows and safe area on every icon).
+
 ## 1.2
 
 - New icon: the suite's colour icons, TextHunter in teal.
